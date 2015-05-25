@@ -188,6 +188,9 @@ class ServerCommand extends CConsoleCommand
                     $is_send = 1;
                     echo "超过3次，需要报警! \n";
                 }
+            } else {
+                // 第一次就成功了。
+                $is_send = 1;
             }
 
             $rs = json_encode($data['rs']);

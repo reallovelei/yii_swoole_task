@@ -20,8 +20,6 @@ abstract class EventBase
         $this->retry_cnt++;
 
         echo "before \n";
-var_dump($this->retry_cnt);
-       // var_dump($this->param, $data);
 
     }
 

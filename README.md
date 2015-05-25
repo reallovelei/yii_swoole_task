@@ -24,5 +24,5 @@ class TestController extends Controller{
 ?>
 ```
 
-有个task表是用来记录异步任务的。如果失败重试3次。sql在protected/data/sql.sql里。
+有个task表是用来记录异步任务的。如果失败重试3次。sql在protected/data/sql.sql里。  
 如有意见欢迎拍砖  83212019@qq.com

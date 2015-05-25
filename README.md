@@ -25,4 +25,8 @@ class TestController extends Controller{
 ```
 
 有个task表是用来记录异步任务的。如果失败重试3次。sql在protected/data/sql.sql里。  
+运行顺序  
+1. ./protected/yiic Server run
+2. http://v1.app.com/index.php?r=test/tt
+
 如有意见欢迎拍砖  83212019@qq.com

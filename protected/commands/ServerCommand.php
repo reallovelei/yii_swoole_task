@@ -2,11 +2,11 @@
 class ServerCommand extends CConsoleCommand
 {
     public $config = array(
-       'worker_num' => 1,
-       'task_worker_num' => 2,
+       'worker_num' => 2,
        'task_ipc_mode' => 1,
        'heartbeat_check_interval' => 300,
        'heartbeat_idle_time'      => 300,
+       'dispatch_mode' => 1,
     );
 
     // 接收每一种event请求的个数
@@ -17,6 +17,7 @@ class ServerCommand extends CConsoleCommand
 
     public static $q_config = array();
     public $num = 0;
+    public $redis;
 
 
     public function actionRun()
@@ -24,12 +25,20 @@ class ServerCommand extends CConsoleCommand
         $serv = new swoole_server("127.0.0.1", 9550);
         self::$q_config = require('config.php');
         $task_num = 0;
-        foreach (self::$q_config as $key => $val) {
+
+        $this->redis = new Redis();
+        $this->redis->pconnect('127.0.0.1', 6379);
+        $this->redis->flushAll();
+
+        foreach (self::$q_config['task'] as $key => $val) {
             self::$event_base[$key] = $task_num;
+            //$this->redis->hset('base', $key, $task_num);
             self::$cnt[$key] = 0;
+            $this->redis->hset('cnt', $key, 0);  // 初始化每种类型的计数都是0
             $task_num += $val;
         }
         $this->config['task_worker_num'] = $task_num;
+        $this->config['worker_num'] = self::$q_config['worker_num'];
         $serv->set($this->config);
 
         $serv->on('Start', array($this, 'my_onStart'));
@@ -48,6 +57,7 @@ class ServerCommand extends CConsoleCommand
 
     function my_onStart($serv)
     {
+        /*
         $redis = new Redis();
         $redis->pconnect('127.0.0.1', 6379);
         $redis->flushAll();
@@ -58,8 +68,17 @@ class ServerCommand extends CConsoleCommand
             $work_arr[] = $i;
         }
 
-        echo "MasterPid={$serv->master_pid}|Manager_pid={$serv->manager_pid}\n";
-        echo "Server: start.Swoole version is [".SWOOLE_VERSION."]\n";
+        // 将每个的基数放到redis中
+        foreach (self::$event_base as $key => $val) {
+            $redis->hset('base', $key, $val);
+        }
+
+        foreach (self::$cnt as $key => $val) {
+            $redis->hset('cnt', $key, $val);
+        }
+        */
+        swoole_set_process_name("php master worker");
+        echo "Server: Start.Swoole version is [".SWOOLE_VERSION."]\n";
     }
 
     function my_onShutdown($serv)
@@ -117,21 +136,28 @@ class ServerCommand extends CConsoleCommand
             $map = json_decode($map, true);
             $tid = $map[$pid];
         }
-    //var_dump('map', $map, 'tid', $tid,'pid:', $pid);
         return $tid;
     }
 
-    function getTaskId($type)
-    {
-        self::$cnt[$type]++;
-        $mod = self::$cnt[$type] % self::$q_config[$type];
+    function getTaskId($type, $data)
+    {var_dump('taskid', $data);
+        $class = $data['class'];
+        if (isset(self::$q_config['key'][$class])) {
+            $key = self::$q_config['key'][$class];
+            $mod = $data['param'][$key] % self::$q_config['task'][$type];
+        } else {
+            $cnt = $this->redis->hget('cnt', $type);
+            $cnt++;
+            $this->redis->hset('cnt', $type, $cnt);
+            $mod = $cnt % self::$q_config['task'][$type];
+        }
         $tid = $mod + self::$event_base[$type];
         return $tid;
     }
 
     function my_onReceive(swoole_server $serv, $fd, $from_id, $rdata)
     {
-        //echo "receive data: $rdata \n";
+        echo "receive data: $rdata \n";
         $data = json_decode($rdata, true);
         if (isset($data['class'])) {
             $type = $data['class'];
@@ -140,8 +166,9 @@ class ServerCommand extends CConsoleCommand
                 $type = 'Common';
             }
 
-            $tid = $this->getTaskId($type);
-
+            $tid = $this->getTaskId($type, $data);
+            echo "receive tid:{$tid} \n";
+        //    return;
             //var_dump(self::$cnt, self::$event_base, $tid, $data);
             $data['fd'] = $fd;
             $rs = $serv->task($data, $tid);
@@ -157,6 +184,7 @@ class ServerCommand extends CConsoleCommand
 
     function my_onTask(swoole_server $serv, $task_id, $from_id, $data)
     {
+// var_dump('task:', $data);
         $dir = dirname(__DIR__).'/event/';
         $class = $data['class'].'Event';
         include_once($dir.$class.'.php');
@@ -169,18 +197,20 @@ class ServerCommand extends CConsoleCommand
 
     function my_onFinish(swoole_server $serv, $task_id, $data)
     {
+        var_dump('finish', $data);
         $is_send = 0;
         $rs = $data['rs'];
         if (is_array($data['rs'])) {
             // 失败了
             if ($rs['err_no'] > 0) {
-                $tid = $this->getTaskId('Retry');
-                echo "faild tid: {$tid} \n";
 
                 $task_data['class'] = $rs['class'];
                 $task_data['param'] = $rs['param'];
                 $task_data['fd'] = $data['fd'];
                 $task_data['retry_cnt'] = $rs['retry_cnt'];
+
+                $tid = $this->getTaskId('Retry', $task_data);
+                echo "faild tid: {$tid} \n";
 
                 if ($rs['retry_cnt'] < 3) {
                     $serv->task($task_data, $tid);
@@ -189,7 +219,7 @@ class ServerCommand extends CConsoleCommand
                     echo "超过3次，需要报警! \n";
                 }
             } else {
-                // 第一次就成功了。
+                // 一次成功
                 $is_send = 1;
             }
 
@@ -207,6 +237,4 @@ class ServerCommand extends CConsoleCommand
     {
         echo "worker abnormal exit. WorkerId=$worker_id|Pid=$worker_pid|ExitCode=$exit_code\n";
     }
-
-
 }

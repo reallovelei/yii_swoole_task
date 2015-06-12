@@ -57,27 +57,9 @@ class ServerCommand extends CConsoleCommand
 
     function my_onStart($serv)
     {
-        /*
-        $redis = new Redis();
-        $redis->pconnect('127.0.0.1', 6379);
-        $redis->flushAll();
-        $work_arr = array();
-
-        for ($i = 0; $i < $serv->setting['task_worker_num']; $i++) {
-            $redis->lpush('free', $i);
-            $work_arr[] = $i;
+        if (PHP_OS == "Linux") {
+            swoole_set_process_name("php master worker");
         }
-
-        // 将每个的基数放到redis中
-        foreach (self::$event_base as $key => $val) {
-            $redis->hset('base', $key, $val);
-        }
-
-        foreach (self::$cnt as $key => $val) {
-            $redis->hset('cnt', $key, $val);
-        }
-        */
-        swoole_set_process_name("php master worker");
         echo "Server: Start.Swoole version is [".SWOOLE_VERSION."]\n";
     }
 
@@ -113,10 +95,14 @@ class ServerCommand extends CConsoleCommand
         $pid = getmypid();
         if($worker_id >= $serv->setting['worker_num']) {
             echo "php {$argv[0]} task worker {$pid}\n";
-            swoole_set_process_name("php {$argv[0]} task worker");
+            if (PHP_OS == "Linux") {
+                swoole_set_process_name("php {$argv[0]} task worker");
+            }
         } else {
             echo "php {$argv[0]} event worker {$pid}\n";
-            swoole_set_process_name("php {$argv[0]} event worker");
+            if (PHP_OS == "Linux") {
+                swoole_set_process_name("php {$argv[0]} event worker");
+            }
         }
         echo "WorkerStart|MasterPid={$serv->master_pid}|Manager_pid={$serv->manager_pid}|WorkerId=$worker_id | CurPid:{$pid} \n";
         //$serv->addtimer(500); //500ms

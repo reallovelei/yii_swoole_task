@@ -19,7 +19,7 @@ return array(
 	'components'=>array(
 		// uncomment the following to use a MySQL database
 		'db'=>array(
-			'connectionString' => 'mysql:host=192.168.1.141;dbname=dev_test',
+			'connectionString' => 'mysql:host=192.168.1.50;dbname=dev_test',
 			'emulatePrepare' => true,
 			'username' => 'root',
 			'password' => '',

@@ -27,6 +27,14 @@ return array(
 			// enable cookie-based authentication
 			'allowAutoLogin'=>true,
 		),
+
+        'redis'=>array(
+            'class'=>'CRedisCache',
+            'hostname'=>'127.0.0.1',
+            'port'=>6379,
+            'database'=>0,
+        ),
+
 		'db'=>array(
 			'connectionString' => 'sqlite:'.dirname(__FILE__).'/../data/testdrive.db',
 		),
